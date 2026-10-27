@@ -1,3 +1,28 @@
+fun leerTexto(mensaje: String, porDefecto: String): String {
+    println(mensaje)
+    val entrada = readlnOrNull()?.trim()
+    return if (entrada.isNullOrEmpty()) {
+        println("Dato vacío. Se usará: $porDefecto")
+        porDefecto
+    } else {
+        entrada
+    }
+}
+
+fun leerEntero(mensaje: String, min: Int, max: Int): Int {
+    while (true) {
+        println(mensaje)
+        val entrada = readlnOrNull()
+        if (entrada == null) {
+            println("Sin entrada. Se usará: $min")
+            return min
+        }
+        val numero = entrada.trim().toIntOrNull()
+        if (numero != null && numero in min..max) return numero
+        println("Valor inválido. Ingrese un número entre $min y $max.")
+    }
+}
+
 fun main() {
     // Cliente
     val nombre: String
@@ -7,37 +32,36 @@ fun main() {
     // Pizza
     val nombresPizzas: List<String> = listOf("Pepperoni", "Cuatro Quesos", "Napolitana", "Española")
     val preciosPizzas: List<Double> = listOf(8990.0, 10490.0, 9490.0, 9990.0)
-    var precioUnitario: Double
-    var ingredientesDisponibles: Int
+    val precioUnitario: Double
+    var ingredientesDisponibles = 10
+    val ingredientesPorPizza = 2
 
     // Pedido
-    var idPedido: Int
-    var cantidadPizzas: Int
+    val idPedido = 1001
+    val cantidadPizzas: Int
     var totalPedido: Double
-    var estadoPedido: String
+    val estadoPedido: String
 
     // Datos personales
-    println("Ingrese su nombre: ")
-    nombre = readlnOrNull().toString()
-    println("Ingrese la dirección de entrega: ")
-    direccion = readlnOrNull().toString()
-    println("Finalmente, ingrese su número de contacto: ")
-    telefono = readlnOrNull().toString()
+    nombre = leerTexto("Ingrese su nombre: ", "Sin nombre")
+    direccion = leerTexto("Ingrese la dirección de entrega: ", "Sin dirección")
+
+    println("Finalmente, ingrese su número de contacto (9 dígitos): ")
+    val telefonoIngresado = readlnOrNull()?.replace(" ", "") ?: ""
+    telefono = if (telefonoIngresado.length == 9 && telefonoIngresado.all { it.isDigit() }) {
+        telefonoIngresado
+    } else {
+        println("Teléfono vacío o inválido. Se usará: Sin teléfono")
+        "Sin teléfono"
+    }
 
     // Pedido cliente
-    println("Ingrese la cantidad de pizzas: ")
-    cantidadPizzas = readln().toInt()
-    println("Seleccione el número de la pizza que desea: ")
     for (i in nombresPizzas.indices) {
         println("${i + 1}. ${nombresPizzas[i]}")
     }
-    val pizzaSeleccionada: Int = readln().toInt()
-
-    // Datos del pedido que no ingresa el usuario
-    idPedido = 1001
+    val pizzaSeleccionada = leerEntero("Seleccione el número de la pizza que desea: ", 1, nombresPizzas.size)
+    cantidadPizzas = leerEntero("Ingrese la cantidad de pizzas: ", 1, 20)
     precioUnitario = preciosPizzas[pizzaSeleccionada - 1]
-    ingredientesDisponibles = 10
-    val ingredientesPorPizza = 2
 
     // Cálculo del total
     totalPedido = precioUnitario * cantidadPizzas
