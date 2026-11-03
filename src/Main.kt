@@ -1,112 +1,188 @@
-fun leerTexto(mensaje: String, porDefecto: String): String {
-    println(mensaje)
-    val entrada = readlnOrNull()?.trim()
-    return if (entrada.isNullOrEmpty()) {
-        println("Dato vacío. Se usará: $porDefecto")
-        porDefecto
-    } else {
-        entrada
-    }
-}
+const val MAX_PEDIDOS_DIA = 50
+const val MAX_PIZZAS_POR_LINEA = 20
 
-fun leerEntero(mensaje: String, min: Int, max: Int): Int {
-    while (true) {
-        println(mensaje)
-        val entrada = readlnOrNull()
-        if (entrada == null) {
-            println("Sin entrada. Se usará: $min")
-            return min
-        }
-        val numero = entrada.trim().toIntOrNull()
-        if (numero != null && numero in min..max) return numero
-        println("Valor inválido. Ingrese un número entre $min y $max.")
-    }
-}
+// Pedidos del día: arreglo de tamaño fijo + contador de pedidos registrados.
+val pedidosDelDia = arrayOfNulls<Pedido>(MAX_PEDIDOS_DIA)
+var cantidadPedidos = 0
+var siguienteIdPedido = 1001
+
+val catalogo: List<Producto> = listOf(
+    Producto("Pepperoni", 8990, mapOf("masa" to 1, "salsa de tomate" to 1, "mozzarella" to 2, "pepperoni" to 1)),
+    Producto("Cuatro Quesos", 10490, mapOf("masa" to 1, "salsa de tomate" to 1, "mozzarella" to 1, "queso azul" to 1, "parmesano" to 1, "cheddar" to 1)),
+    Producto("Napolitana", 9490, mapOf("masa" to 1, "salsa de tomate" to 1, "mozzarella" to 2, "tomate" to 1, "aceitunas" to 1)),
+    Producto("Española", 9990, mapOf("masa" to 1, "salsa de tomate" to 1, "mozzarella" to 2, "chorizo" to 1, "pimentón" to 1))
+)
+
+val inventario = Inventario(
+    mapOf(
+        "masa" to 12, "salsa de tomate" to 12, "mozzarella" to 20, "pepperoni" to 5,
+        "queso azul" to 4, "parmesano" to 4, "cheddar" to 4, "tomate" to 5,
+        "aceitunas" to 5, "chorizo" to 4, "pimentón" to 4
+    )
+)
+
+val repartidores: List<Repartidor> = listOf(
+    Repartidor("Carlos", "+56 9 1111 2222", "moto", 1.2),
+    Repartidor("Ana", "+56 9 3333 4444", "auto", 3.5),
+    Repartidor("Pedro", "+56 9 5555 6666", "bicicleta", 0.8)
+)
 
 fun main() {
-    // Cliente
-    val nombre: String
-    val direccion: String
-    val telefono: String
+    println("===== Sistema de gestión - Pizzería =====")
+    while (true) {
+        println()
+        println("1. Registrar pedido")
+        println("2. Reporte de pedidos del día")
+        println("3. Avanzar estado de un pedido")
+        println("4. Ver inventario")
+        println("5. Reabastecer ingrediente")
+        println("6. Ver repartidores")
+        println("0. Salir")
+        when (leerEntero("Opción: ", 0, 6)) {
+            1 -> registrarPedido()
+            2 -> mostrarReporte()
+            3 -> avanzarEstado()
+            4 -> inventario.mostrar()
+            5 -> reabastecerIngrediente()
+            6 -> repartidores.forEach { println("  ${it.describir()}") }
+            0 -> {
+                println("Cerrando el sistema. ¡Hasta luego!")
+                return
+            }
+        }
+    }
+}
 
-    // Pizza
-    val nombresPizzas: List<String> = listOf("Pepperoni", "Cuatro Quesos", "Napolitana", "Española")
-    val preciosPizzas: List<Double> = listOf(8990.0, 10490.0, 9490.0, 9990.0)
-    val precioUnitario: Double
-    var ingredientesDisponibles = 10
-    val ingredientesPorPizza = 2
+// ===================== Registro de pedidos =====================
 
-    // Pedido
-    val idPedido = 1001
-    val cantidadPizzas: Int
-    var totalPedido: Double
-    val estadoPedido: String
+fun registrarCliente(): Cliente {
+    println("\n--- Datos del cliente ---")
+    val nombre = leerTexto("Nombre: ", "Sin nombre")
+    val direccion = leerTexto("Dirección de entrega: ", "Sin dirección")
+    val telefono = validarTelefono(leerTextoOpcional("Teléfono celular (9 dígitos): "))
+    val correo = validarCorreo(leerTextoOpcional("Correo electrónico (opcional, Enter para omitir): "))
+    return Cliente(nombre, telefono, correo, direccion)
+}
 
-    // Datos personales
-    nombre = leerTexto("Ingrese su nombre: ", "Sin nombre")
-    direccion = leerTexto("Ingrese la dirección de entrega: ", "Sin dirección")
+fun seleccionarProductos(): List<LineaPedido> {
+    val lineas = mutableListOf<LineaPedido>()
+    println("\n--- Menú ---")
+    catalogo.forEachIndexed { i, producto -> println("${i + 1}. ${producto.detallarProducto()}") }
+    while (true) {
+        val opcion = leerEntero("Número de pizza (0 para terminar): ", 0, catalogo.size)
+        if (opcion == 0) break
+        val cantidad = leerEntero("Cantidad: ", 1, MAX_PIZZAS_POR_LINEA)
+        lineas.add(LineaPedido(catalogo[opcion - 1], cantidad))
+        println("Agregado: $cantidad x ${catalogo[opcion - 1].nombre}")
+    }
+    return lineas
+}
 
-    println("Finalmente, ingrese su número de contacto (9 dígitos): ")
-    val telefonoIngresado = readlnOrNull()?.replace(" ", "") ?: ""
-    telefono = if (telefonoIngresado.length == 9 && telefonoIngresado.all { it.isDigit() }) {
-        telefonoIngresado
-    } else {
-        println("Teléfono vacío o inválido. Se usará: Sin teléfono")
-        "Sin teléfono"
+fun registrarPedido() {
+    if (cantidadPedidos >= MAX_PEDIDOS_DIA) {
+        println("Se alcanzó el máximo de $MAX_PEDIDOS_DIA pedidos del día.")
+        return
+    }
+    val cliente = registrarCliente()
+    val lineas = seleccionarProductos()
+    if (lineas.isEmpty()) {
+        println("No se agregaron productos. Pedido cancelado.")
+        return
+    }
+    val notas = leerTextoOpcional("Notas del pedido (opcional): ")
+
+    try {
+        val pedido = Pedido(siguienteIdPedido, cliente, lineas, notas)
+        pedido.calcularTotal() // valida que el costo sea correcto antes de tocar el inventario
+
+        println("\nVerificando ingredientes...")
+        if (!inventario.prepararLote(lineas)) {
+            println("Pedido rechazado por falta de ingredientes.")
+            return
+        }
+
+        pedidosDelDia[cantidadPedidos] = pedido
+        cantidadPedidos++
+        siguienteIdPedido++
+
+        println("Pedido confirmado.\n")
+        println(pedido.generarResumen())
+        cliente.notificar("Tu pedido N° ${pedido.id} está ${pedido.estado.etiqueta.lowercase()}.")
+    } catch (e: IllegalArgumentException) {
+        println("Error en el pedido: ${e.message} Revise los datos e intente de nuevo.")
+    }
+}
+
+// ===================== Reporte y estados =====================
+
+fun mostrarReporte() {
+    val registrados = pedidosDelDia.filterNotNull()
+    if (registrados.isEmpty()) {
+        println("Aún no hay pedidos registrados hoy.")
+        return
+    }
+    println("\n================ REPORTE DEL DÍA ================")
+    for (pedido in registrados) {
+        val pizzas = pedido.lineas.joinToString(", ") { "${it.cantidad}x ${it.producto.nombre}" }
+        println("N° ${pedido.id} | ${pedido.cliente.nombre} | $pizzas | " +
+                "${formatearCLP(pedido.calcularTotal().total)} | ${pedido.estado.etiqueta}")
     }
 
-    // Pedido cliente
-    for (i in nombresPizzas.indices) {
-        println("${i + 1}. ${nombresPizzas[i]}")
+    // Completados = Listo o En camino; pendientes = En preparación.
+    val completados = registrados.filter { it.estaCompletado() }
+    val pendientes = registrados.filter { !it.estaCompletado() }
+    println("\nCompletados (${completados.size}): ${completados.joinToString { "N° ${it.id}" }.ifEmpty { "ninguno" }}")
+    println("Pendientes (${pendientes.size}): ${pendientes.joinToString { "N° ${it.id}" }.ifEmpty { "ninguno" }}")
+    println("Total vendido: ${formatearCLP(registrados.sumOf { it.calcularTotal().total })}")
+}
+
+fun buscarPedido(id: Int): Pedido? = pedidosDelDia.find { it?.id == id }
+
+// Repartidor disponible más cercano: se ordena por distancia y find toma el primero libre.
+fun asignarRepartidor(): Repartidor? =
+    repartidores.sortedBy { it.distanciaKm }.find { it.disponible }
+
+fun avanzarEstado() {
+    if (cantidadPedidos == 0) {
+        println("Aún no hay pedidos registrados hoy.")
+        return
     }
-    val pizzaSeleccionada = leerEntero("Seleccione el número de la pizza que desea: ", 1, nombresPizzas.size)
-    cantidadPizzas = leerEntero("Ingrese la cantidad de pizzas: ", 1, 20)
-    precioUnitario = preciosPizzas[pizzaSeleccionada - 1]
-
-    // Cálculo del total
-    totalPedido = precioUnitario * cantidadPizzas
-    val aplicaDescuento: Boolean = cantidadPizzas > 3
-    totalPedido = if (aplicaDescuento) totalPedido * 0.9 else totalPedido
-
-    // Verificación de stock
-    val ingredientesNecesarios = cantidadPizzas * ingredientesPorPizza
-    val pedidoConfirmado: Boolean = if (ingredientesNecesarios <= ingredientesDisponibles) {
-        ingredientesDisponibles -= ingredientesNecesarios
-        println("Pedido confirmado. Ingredientes restantes en inventario: $ingredientesDisponibles")
-        true
-    } else {
-        println("No hay ingredientes suficientes (se necesitan $ingredientesNecesarios y hay $ingredientesDisponibles).")
-        println("El pedido no puede ser completado.")
-        false
-    }
-    estadoPedido = if (pedidoConfirmado) "Preparación" else "Cancelado"
-
-    // Asignación de repartidor
-    val repartidor: String = when {
-        !pedidoConfirmado -> "Sin asignar"
-        cantidadPizzas <= 3 -> "Carlos (moto)"
-        else -> "Ana (auto)"
+    val id = leerEntero("N° de pedido: ", 1001, siguienteIdPedido - 1)
+    val pedido = buscarPedido(id) ?: run {
+        println("No existe el pedido N° $id.")
+        return
     }
 
-    // Imprimir resumen pedido
+    when (pedido.estado) {
+        EstadoPedido.EN_PREPARACION -> {
+            pedido.cambiarEstado(EstadoPedido.LISTO)
+            println("Pedido N° ${pedido.id} marcado como Listo.")
+            pedido.cliente.notificar("Tu pedido N° ${pedido.id} está listo.")
+        }
+        EstadoPedido.LISTO -> {
+            val repartidor = asignarRepartidor()
+            repartidor?.let {
+                it.entregarPedido(pedido)
+                pedido.cliente.notificar("Tu pedido N° ${pedido.id} va en camino con ${it.nombre}.")
+            } ?: println("No hay repartidores disponibles. El pedido sigue en estado Listo.")
+        }
+        EstadoPedido.EN_CAMINO -> println("El pedido N° ${pedido.id} ya va en camino.")
+    }
     println()
-    if (estadoPedido == "Cancelado") {
-        println("El pedido N° $idPedido fue cancelado.")
-    } else {
-        println("===RESUMEN===")
-        println("Pedido N° $idPedido")
-        println("--- Cliente ---")
-        println("Nombre cliente: $nombre")
-        println("Dirección de entrega: $direccion")
-        println("Contacto: $telefono")
-        println("--- Pizza ---")
-        println("Pizza: ${nombresPizzas[pizzaSeleccionada - 1]}")
-        println("Precio unitario: $${"%.0f".format(precioUnitario)}")
-        println("--- Pedido ---")
-        println("Cantidad pizzas: $cantidadPizzas")
-        println("Descuento 10%: ${if (aplicaDescuento) "Sí" else "No"}")
-        println("Total: $${"%.0f".format(totalPedido)}")
-        println("Estado: $estadoPedido")
-        println("Repartidor: $repartidor")
+    println(pedido.generarResumen())
+}
+
+// ===================== Inventario =====================
+
+fun reabastecerIngrediente() {
+    val ingredientes = inventario.nombresIngredientes()
+    ingredientes.forEachIndexed { i, nombre -> println("${i + 1}. $nombre") }
+    val opcion = leerEntero("Ingrediente: ", 1, ingredientes.size)
+    // Rango amplio a propósito: una cantidad negativa o 0 se rechaza con una excepción.
+    val cantidad = leerEntero("Cantidad a agregar: ", -1000, 1000)
+    try {
+        inventario.reabastecer(ingredientes[opcion - 1], cantidad)
+    } catch (e: IllegalArgumentException) {
+        println("Error: ${e.message} Ingrese una cantidad mayor que 0.")
     }
 }
