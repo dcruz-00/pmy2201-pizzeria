@@ -64,7 +64,17 @@ class Inventario(stockInicial: Map<String, Int>) {
         if (ingrediente !in stock) {
             throw IllegalArgumentException("El ingrediente '$ingrediente' no existe en el inventario.")
         }
-        stock[ingrediente] = (stock[ingrediente] ?: 0) + cantidad
+        val actual = stock[ingrediente] ?: 0
+        // Math.addExact lanza ArithmeticException si la suma supera Int.MAX_VALUE,
+        // en vez de "dar la vuelta" a un número negativo sin avisar.
+        val nuevoTotal = try {
+            Math.addExact(actual, cantidad)
+        } catch (e: ArithmeticException) {
+            throw IllegalArgumentException(
+                "No se puede agregar $cantidad a '$ingrediente': se superaría el máximo permitido (${Int.MAX_VALUE})."
+            )
+        }
+        stock[ingrediente] = nuevoTotal
         println("Reabastecido: $ingrediente +$cantidad (total: ${stock[ingrediente]}).")
     }
 
